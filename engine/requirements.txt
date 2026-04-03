@@ -1,0 +1,6 @@
+openai
+langgraph
+langchain-openai
+httpx
+python-dotenv
+uuid

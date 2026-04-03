@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  engine:
+    build: ./engine
+    env_file: .env
+    depends_on:
+      - target
+      - proxy
+    networks:
+      - toolbreaker
+
+  target:
+    build: ./target
+    ports:
+      - "8001:8001"
+    env_file: .env
+    networks:
+      - toolbreaker
+
+  proxy:
+    build: ./proxy
+    ports:
+      - "8002:8002"
+    env_file: .env
+    volumes:
+      - ./proxy/data:/app/data
+    networks:
+      - toolbreaker
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "80:80"
+    depends_on:
+      - proxy
+    networks:
+      - toolbreaker
+
+networks:
+  toolbreaker:
+    driver: bridge
