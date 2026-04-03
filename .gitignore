@@ -34,3 +34,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Test / scan output (never commit)
+engine/reports/
+test-results/
