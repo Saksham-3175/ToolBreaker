@@ -216,32 +216,46 @@ async def score(state: EngineState) -> dict:
 
     scored_findings: list[dict] = []
 
+    # Cursor into exploit_proxy_findings — advances by actual tool-call count,
+    # so attempts that trigger 0 or 2+ calls don't break the mapping.
+    pf_cursor = 0
+
     for idx, result in enumerate(state["exploit_results"]):
-        sc: dict = scores[idx] if idx < len(scores) else {"success": False, "severity": "info", "explanation": "unscored", "evidence": ""}
+        sc: dict = scores[idx] if idx < len(scores) else {
+            "success": False, "severity": "info",
+            "explanation": "unscored", "evidence": "",
+        }
 
-        # Best-effort: match proxy finding by position within exploit phase
-        proxy_id: int | None = None
-        if result["tool_calls"] and idx < len(exploit_proxy_findings):
-            proxy_id = exploit_proxy_findings[idx].get("id")
+        severity  = sc.get("severity", "info")
+        n_calls   = len(result["tool_calls"])
+        proxy_ids = []
 
-        finding = {**result, "score": sc, "proxy_id": proxy_id}
+        # Collect all proxy finding IDs triggered by this attempt
+        for j in range(n_calls):
+            pf_idx = pf_cursor + j
+            if pf_idx < len(exploit_proxy_findings):
+                proxy_ids.append(exploit_proxy_findings[pf_idx]["id"])
+
+        pf_cursor += n_calls  # advance past every call this attempt made
+
+        finding = {**result, "score": sc, "proxy_ids": proxy_ids}
         scored_findings.append(finding)
 
-        # PATCH severity back to proxy
-        if proxy_id and sc.get("severity"):
+        # PATCH every triggered finding with the scored severity
+        for pid in proxy_ids:
             try:
                 async with httpx.AsyncClient(timeout=5.0) as http:
                     await http.patch(
-                        f"{proxy}/findings/{proxy_id}/severity",
-                        json={"severity": sc["severity"]},
+                        f"{proxy}/findings/{pid}/severity",
+                        json={"severity": severity},
                     )
             except Exception as exc:
-                print(f"[score]   PATCH severity failed for id={proxy_id}: {exc}", file=sys.stderr)
+                print(f"[score]   PATCH failed for id={pid}: {exc}", file=sys.stderr)
 
         icon = "✓" if sc.get("success") else "✗"
         print(
             f"[score]   attempt {result['attempt']}: {icon}  "
-            f"severity={sc.get('severity','?')}  {sc.get('explanation','')[:80]}"
+            f"severity={severity}  patched={proxy_ids}  {sc.get('explanation','')[:70]}"
         )
 
     print(f"[score] done — {len(scored_findings)} findings scored")
