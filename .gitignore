@@ -38,3 +38,4 @@ Thumbs.db
 # Test / scan output (never commit)
 engine/reports/
 test-results/
+BUILD.md
