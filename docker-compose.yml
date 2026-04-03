@@ -1,41 +1,58 @@
-version: "3.9"
-
 services:
-  engine:
-    build: ./engine
-    env_file: .env
-    depends_on:
-      - target
-      - proxy
+  proxy:
+    build: ./proxy
+    ports:
+      - "8002:8002"
+    environment:
+      SQLITE_PATH: /data/toolbreaker.db
+    volumes:
+      - proxy-data:/data
     networks:
       - toolbreaker
+    restart: unless-stopped
 
   target:
     build: ./target
     ports:
       - "8001:8001"
-    env_file: .env
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      PROXY_URL: http://proxy:8002
+    depends_on:
+      - proxy
     networks:
       - toolbreaker
-
-  proxy:
-    build: ./proxy
-    ports:
-      - "8002:8002"
-    env_file: .env
-    volumes:
-      - ./proxy/data:/app/data
-    networks:
-      - toolbreaker
+    restart: unless-stopped
 
   dashboard:
     build: ./dashboard
     ports:
       - "80:80"
+    environment:
+      VITE_PROXY_URL: http://localhost:8002
     depends_on:
       - proxy
     networks:
       - toolbreaker
+    restart: unless-stopped
+
+  engine:
+    build: ./engine
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TARGET_URL: http://target:8001
+      PROXY_URL: http://proxy:8002
+    depends_on:
+      - target
+      - proxy
+    networks:
+      - toolbreaker
+    profiles:
+      - attack
+    command: python main.py --vector all
+
+volumes:
+  proxy-data:
 
 networks:
   toolbreaker:
